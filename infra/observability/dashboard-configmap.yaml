@@ -1,0 +1,782 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-flashmarket
+  namespace: observability
+  labels: { grafana_dashboard: "1" }
+data:
+  flashmarket.json: |
+    {
+     "uid": "flashmarket",
+     "title": "FlashMarket — Black Friday war room",
+     "schemaVersion": 39,
+     "time": {
+      "from": "now-30m",
+      "to": "now"
+     },
+     "refresh": "10s",
+     "panels": [
+      {
+       "type": "row",
+       "title": "Вход: HAProxy, Istio Gateway, Rate Limiter",
+       "id": 1,
+       "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+       }
+      },
+      {
+       "type": "timeseries",
+       "title": "Gateway responses by code",
+       "id": 2,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (response_code) (rate(istio_requests_total{reporter=\"source\",pod=~\"public-istio.*\"}[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Rate-limited share (429)",
+       "id": 3,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "percentunit",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum(rate(istio_requests_total{reporter=\"source\",pod=~\"public-istio.*\",response_code=\"429\"}[1m])) / sum(rate(istio_requests_total{reporter=\"source\",pod=~\"public-istio.*\"}[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Rate limiter decisions",
+       "id": 4,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (key1) (rate(ratelimit_service_rate_limit_over_limit[1m])) or label_replace(sum by (key1) (rate(ratelimit_service_rate_limit_within_limit[1m])), \"key1\", \"within: $1\", \"key1\", \"(.*)\")",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "HAProxy traffic in (VIP pair)",
+       "id": 5,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "Bps",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (instance) (rate(haproxy_frontend_bytes_in_total{proxy=\"fe_http\"}[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "title": "Сервисы: RED (Istio telemetry)",
+       "id": 6,
+       "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+       }
+      },
+      {
+       "type": "timeseries",
+       "title": "Requests per service",
+       "id": 7,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 8,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (destination_service_name) (rate(istio_requests_total{reporter=\"destination\",destination_service_namespace=\"flashmarket\"}[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "5xx ratio",
+       "id": 8,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 8,
+        "y": 10,
+        "w": 8,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "percentunit",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (destination_service_name) (rate(istio_requests_total{reporter=\"destination\",destination_service_namespace=\"flashmarket\",response_code=~\"5..\"}[1m])) / sum by (destination_service_name) (rate(istio_requests_total{reporter=\"destination\",destination_service_namespace=\"flashmarket\"}[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Latency p95",
+       "id": 9,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 16,
+        "y": 10,
+        "w": 8,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "ms",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "histogram_quantile(0.95, sum by (destination_service_name, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\",destination_service_namespace=\"flashmarket\"}[1m])))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "title": "Kafka: throughput, latency, queue fill",
+       "id": 10,
+       "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 1
+       }
+      },
+      {
+       "type": "timeseries",
+       "title": "Events produced per topic",
+       "id": 11,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "ops",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (topic) (rate(fm_events_produced_total[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Broker ack latency p95 (acks=all)",
+       "id": 12,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 6,
+        "y": 19,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "s",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "histogram_quantile(0.95, sum by (topic, le) (rate(fm_kafka_produce_ack_seconds_bucket[1m])))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "End-to-end event latency p95 (produce → consume)",
+       "id": 13,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "s",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "histogram_quantile(0.95, sum by (topic, group, le) (rate(fm_event_e2e_latency_seconds_bucket[1m])))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Consumer lag (queue fill)",
+       "id": 14,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 18,
+        "y": 19,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "short",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag)",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "title": "Устойчивость: circuit breaker и повторы",
+       "id": 15,
+       "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+       }
+      },
+      {
+       "type": "timeseries",
+       "title": "Outlier detection: ejected hosts",
+       "id": 16,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "short",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (cluster_name) (envoy_cluster_outlier_detection_ejections_active{cluster_name=~\"outbound.*flashmarket.*\"})",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Retries and Envoy response flags",
+       "id": 17,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "ops",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (cluster_name) (rate(envoy_cluster_upstream_rq_retry{cluster_name=~\"outbound.*flashmarket.*\"}[1m])) or sum by (response_flags) (rate(istio_requests_total{response_flags!=\"-\",reporter=\"source\"}[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "title": "Бизнес и данные",
+       "id": 18,
+       "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 1
+       }
+      },
+      {
+       "type": "timeseries",
+       "title": "Reservations by result",
+       "id": 19,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "ops",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (result) (rate(fm_inventory_reserve_total[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Payments by result",
+       "id": 20,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 6,
+        "y": 37,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "ops",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (result) (rate(fm_payments_total[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Catalog cache hit ratio",
+       "id": 21,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "percentunit",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum(rate(fm_catalog_cache_total{result=\"hit\"}[1m])) / sum(rate(fm_catalog_cache_total[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      },
+      {
+       "type": "timeseries",
+       "title": "Cold archive: records/s",
+       "id": 22,
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+       },
+       "gridPos": {
+        "x": 18,
+        "y": 37,
+        "w": 6,
+        "h": 8
+       },
+       "fieldConfig": {
+        "defaults": {
+         "unit": "ops",
+         "custom": {
+          "fillOpacity": 15,
+          "lineWidth": 2
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "list",
+         "placement": "bottom"
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (topic) (rate(fm_archive_records_total[1m]))",
+         "legendFormat": "__auto"
+        }
+       ]
+      }
+     ],
+     "templating": {
+      "list": [
+       {
+        "name": "ds",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 2
+       }
+      ]
+     }
+    }

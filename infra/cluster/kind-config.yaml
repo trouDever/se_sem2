@@ -1,0 +1,12 @@
+# Задание 1.1: однонодовый кластер kind без встроенного CNI и kube-proxy — их заменяет Cilium (eBPF)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: flashmarket
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: none
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - { containerPort: 30080, hostPort: 30080 }   # Istio Gateway (вход для HAProxy)
+      - { containerPort: 30300, hostPort: 3000 }    # Grafana

@@ -1,0 +1,10 @@
+# Запуск (из корня репо): make kafka  — или вручную:
+# docker run --rm --network kind -v $PWD/infra/ansible:/work -e K8S_AUTH_KUBECONFIG=/work/kubeconfig fm-ansible \
+#   ansible-playbook playbook-kafka.yml -e kafka_profile=local
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: /usr/local/bin/python3
+  roles:
+    - strimzi_kafka

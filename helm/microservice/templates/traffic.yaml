@@ -1,0 +1,40 @@
+# Маршрут на шлюзе и правила устойчивости едут вместе с сервисом (задания 3.1, 3.2)
+{{- if .Values.route.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Values.name }}
+spec:
+  parentRefs: [ { name: {{ .Values.route.gateway.name }}, namespace: {{ .Values.route.gateway.namespace }} } ]
+  rules:
+    - matches: [ { path: { type: PathPrefix, value: {{ .Values.route.pathPrefix }} } } ]
+      filters:
+        - type: URLRewrite
+          urlRewrite: { path: { type: ReplacePrefixMatch, replacePrefixMatch: {{ .Values.route.rewritePrefix }} } }
+      backendRefs: [ { name: {{ .Values.name }}, port: 80 } ]
+      timeouts: { request: {{ .Values.mesh.timeout }} }
+---
+{{- end }}
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: {{ .Values.name }}
+spec:
+  host: {{ .Values.name }}.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    loadBalancer: { simple: LEAST_REQUEST }
+    connectionPool:
+      tcp: { maxConnections: {{ .Values.mesh.connectionPool.maxConnections }} }
+      http: { http1MaxPendingRequests: {{ .Values.mesh.connectionPool.http1MaxPendingRequests }} }
+    outlierDetection: {{- toYaml .Values.mesh.outlierDetection | nindent 6 }}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ .Values.name }}
+spec:
+  hosts: [ {{ .Values.name }}.{{ .Release.Namespace }}.svc.cluster.local ]
+  http:
+    - route: [ { destination: { host: {{ .Values.name }}.{{ .Release.Namespace }}.svc.cluster.local } } ]
+      timeout: {{ .Values.mesh.timeout }}
+      retries: {{- toYaml .Values.mesh.retries | nindent 8 }}

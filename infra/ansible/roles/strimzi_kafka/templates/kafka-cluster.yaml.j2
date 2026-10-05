@@ -1,0 +1,56 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: dual-role
+  namespace: {{ kafka_namespace }}
+  labels:
+    strimzi.io/cluster: {{ kafka_cluster_name }}
+spec:
+  replicas: {{ kp.replicas }}
+  roles: [controller, broker]
+  storage:
+    type: jbod
+    volumes:
+      - { id: 0, type: persistent-claim, size: {{ kp.storage }}, kraftMetadata: shared, deleteClaim: true }
+  jvmOptions:
+    "-Xms": {{ kp.heap }}
+    "-Xmx": {{ kp.heap }}
+  resources:
+    requests: { cpu: 200m, memory: 768Mi }
+    limits: { memory: 1Gi }
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: {{ kafka_cluster_name }}
+  namespace: {{ kafka_namespace }}
+spec:
+  kafka:
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+        # Strimzi сам создаёт NetworkPolicy для листенера; без peers он открыт всем неймспейсам,
+        # а в Cilium политики объединяются — поэтому ограничиваем явно
+        networkPolicyPeers:
+          - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: flashmarket } }
+          - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kafka } }
+    config:
+      default.replication.factor: {{ kp.rf }}
+      min.insync.replicas: {{ kp.min_isr }}
+      offsets.topic.replication.factor: {{ kp.rf }}
+      transaction.state.log.replication.factor: {{ kp.rf }}
+      transaction.state.log.min.isr: {{ kp.min_isr }}
+      auto.create.topics.enable: false
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef: { name: kafka-metrics, key: kafka-metrics-config.yml }
+  entityOperator:
+    topicOperator:
+      resources: { requests: { cpu: 20m, memory: 192Mi }, limits: { memory: 256Mi } }
+  kafkaExporter:
+    topicRegex: ".*"
+    groupRegex: ".*"
+    resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 96Mi } }

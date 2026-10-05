@@ -1,0 +1,76 @@
+# Алертинг: vmalert -> Alertmanager -> webhook (alert-sink)
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: flashmarket
+  namespace: observability
+spec:
+  groups:
+    - name: flashmarket
+      rules:
+        - alert: ServiceHighErrorRate
+          expr: |
+            sum by (destination_service_name) (rate(istio_requests_total{reporter="destination",destination_service_namespace="flashmarket",response_code=~"5.."}[2m]))
+              / sum by (destination_service_name) (rate(istio_requests_total{reporter="destination",destination_service_namespace="flashmarket"}[2m])) > 0.05
+          for: 1m
+          labels: { severity: critical }
+          annotations: { summary: "5xx > 5% у {{ $labels.destination_service_name }}" }
+        - alert: ServiceHighLatencyP95
+          expr: |
+            histogram_quantile(0.95, sum by (destination_service_name, le) (rate(istio_request_duration_milliseconds_bucket{reporter="destination",destination_service_namespace="flashmarket"}[2m]))) > 400
+          for: 2m
+          labels: { severity: warning }
+        - alert: CircuitBreakerEjection
+          expr: sum by (cluster_name) (envoy_cluster_outlier_detection_ejections_active{cluster_name=~"outbound.*flashmarket.*"}) > 0
+          labels: { severity: warning }
+          annotations: { summary: "Outlier detection исключил под: {{ $labels.cluster_name }}" }
+        - alert: RateLimitSpike
+          expr: |
+            sum(rate(istio_requests_total{reporter="source",pod=~"public-istio.*",response_code="429"}[2m]))
+              / sum(rate(istio_requests_total{reporter="source",pod=~"public-istio.*"}[2m])) > 0.10
+          for: 1m
+          labels: { severity: info }
+        - alert: EdgeBalancerDown
+          expr: up{job="haproxy"} == 0
+          for: 30s
+          labels: { severity: critical }
+        - alert: KafkaConsumerLagHigh
+          expr: sum by (consumergroup) (kafka_consumergroup_lag) > 1000
+          for: 2m
+          labels: { severity: warning }
+        - alert: KafkaUnderReplicatedPartitions
+          expr: sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+          for: 2m
+          labels: { severity: critical }
+        - alert: EventLatencyHigh
+          expr: histogram_quantile(0.95, sum by (le) (rate(fm_event_e2e_latency_seconds_bucket[2m]))) > 5
+          for: 2m
+          labels: { severity: warning }
+        - alert: OversellRisk
+          expr: sum(rate(fm_inventory_reserve_total{result="db_rejected"}[5m])) > 0
+          labels: { severity: critical }
+          annotations: { summary: "Valkey пропустил резерв, который отклонила БД — рассинхронизация остатков" }
+---
+# Приёмник вебхуков Alertmanager: просто логирует входящие алерты (проверка цепочки доставки)
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: alert-sink, namespace: observability }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: alert-sink } }
+  template:
+    metadata: { labels: { app: alert-sink } }
+    spec:
+      containers:
+        - name: sink
+          image: python:3.12-alpine
+          command: ["python", "-c", "import http.server,json,sys\nclass H(http.server.BaseHTTPRequestHandler):\n def do_POST(s):\n  b=json.loads(s.rfile.read(int(s.headers['Content-Length'])))\n  [print(a['status'],a['labels'].get('alertname'),a['startsAt'],flush=True) for a in b['alerts']]\n  s.send_response(200);s.end_headers()\nhttp.server.HTTPServer(('',8080),H).serve_forever()"]
+          ports: [ { containerPort: 8080 } ]
+          resources: { requests: { cpu: 5m, memory: 16Mi }, limits: { memory: 48Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: alert-sink, namespace: observability }
+spec:
+  selector: { app: alert-sink }
+  ports: [ { port: 8080 } ]

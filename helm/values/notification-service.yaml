@@ -1,0 +1,6 @@
+name: notification-service
+module: notification
+replicas: 1
+valkey: { enabled: false }
+database: { url: "mongodb://mongodb.data.svc:27017" }
+route: { enabled: true, pathPrefix: /api/v1/notifications, rewritePrefix: /notifications }

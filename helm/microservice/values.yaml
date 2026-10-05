@@ -1,0 +1,53 @@
+# Значения по умолчанию общего чарта микросервиса FlashMarket.
+name: service
+module: catalog                # какой модуль запускать из общего образа (SERVICE)
+image:
+  repository: flashmarket/app
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+replicas: 2
+port: 8080
+resources:
+  requests: { cpu: 50m, memory: 96Mi }
+  limits: { memory: 256Mi }
+autoscaling:
+  enabled: false               # на однонодовом стенде выключено, в production — включено
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPU: 70
+
+kafka:
+  bootstrap: flashmarket-kafka-bootstrap.kafka.svc:9092
+
+valkey:
+  enabled: true
+  url: valkey://valkey.data.svc:6379
+  secret: valkey-auth
+
+database:
+  urlSecret: ""                # имя секрета с ключом url (PostgreSQL, создаёт Terraform)
+  url: ""                      # строка подключения без пароля (MongoDB)
+
+env: {}                        # дополнительные переменные окружения
+
+route:
+  enabled: false
+  pathPrefix: ""               # например /api/v1/orders
+  rewritePrefix: ""            # например /orders
+  gateway: { name: public, namespace: edge }
+
+mesh:
+  timeout: 5s
+  retries:
+    attempts: 2
+    perTryTimeout: 2s
+    retryOn: connect-failure,refused-stream,unavailable,cancelled,gateway-error,reset
+  connectionPool:
+    maxConnections: 100
+    http1MaxPendingRequests: 50
+  outlierDetection:
+    consecutive5xxErrors: 5
+    consecutiveGatewayErrors: 3
+    interval: 10s
+    baseEjectionTime: 30s
+    maxEjectionPercent: 50

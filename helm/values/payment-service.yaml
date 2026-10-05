@@ -1,0 +1,6 @@
+name: payment-service
+module: payment
+valkey: { enabled: false }
+database: { urlSecret: payment-service-db }
+env: { PSP_DECLINE_RATE: "0.03" }
+route: { enabled: true, pathPrefix: /api/v1/payments, rewritePrefix: /payments }

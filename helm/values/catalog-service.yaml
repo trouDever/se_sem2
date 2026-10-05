@@ -1,0 +1,4 @@
+name: catalog-service
+module: catalog
+database: { url: "mongodb://mongodb.data.svc:27017" }
+route: { enabled: true, pathPrefix: /api/v1/catalog, rewritePrefix: /catalog }

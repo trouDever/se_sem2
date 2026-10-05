@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: order-service
+  namespace: argocd
+  labels: { app.kubernetes.io/part-of: flashmarket }
+spec:
+  project: default
+  source:
+    repoURL: http://gitea-http.git.svc:3000/fm/flashmarket.git
+    targetRevision: main
+    path: helm/microservice
+    helm:
+      releaseName: order-service
+      valueFiles: [ ../values/order-service.yaml ]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: flashmarket
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

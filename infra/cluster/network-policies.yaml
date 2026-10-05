@@ -1,0 +1,87 @@
+# Задание 1.1: Cilium как средство сетевых политик. В рабочих неймспейсах — запрет по умолчанию,
+# разрешены только реальные потоки. Решения по политикам видны в Hubble (verdict DROPPED/FORWARDED).
+# Платформенные неймспейсы (kube-system, istio-system, observability) не ограничиваются.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: { name: flashmarket-default, namespace: flashmarket }
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities: [host]                                   # kubelet-пробы
+    - fromEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: edge, gateway.networking.k8s.io/gateway-name: public }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: observability }
+    - fromEndpoints:                                         # order -> inventory (синхронный резерв)
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: flashmarket, app: order-service }
+      toPorts: [ { ports: [ { port: "8080" } ] } ]
+  egress:
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: data }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: kafka }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: istio-system }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: flashmarket, app: inventory-service }
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns }
+      toPorts:
+        - ports: [ { port: "53", protocol: ANY } ]
+          rules: { dns: [ { matchPattern: "*" } ] }
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: { name: data-default, namespace: data }
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities: [host]
+    - fromEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: flashmarket }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: observability }
+    - fromEndpoints:                                         # rate limiter -> Valkey
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: edge, app: ratelimit }
+      toPorts: [ { ports: [ { port: "6379" } ] } ]
+  egress:
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns }
+      toPorts: [ { ports: [ { port: "53", protocol: ANY } ] } ]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: { name: kafka-default, namespace: kafka }
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities: [host]
+    - fromEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: kafka }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: flashmarket }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: observability }
+  egress:
+    - toEntities: [kube-apiserver]                           # оператор Strimzi
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: kafka }
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns }
+      toPorts: [ { ports: [ { port: "53", protocol: ANY } ] } ]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: { name: edge-default, namespace: edge }
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities: [host, world, remote-node]               # HAProxy снаружи кластера -> NodePort шлюза
+      toPorts: [ { ports: [ { port: "80" }, { port: "15021" } ] } ]
+    - fromEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: edge }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: observability }
+  egress:
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: flashmarket }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: edge }
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: istio-system }
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: data, app: valkey }
+      toPorts: [ { ports: [ { port: "6379" } ] } ]
+    - toEndpoints:
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns }
+      toPorts: [ { ports: [ { port: "53", protocol: ANY } ] } ]

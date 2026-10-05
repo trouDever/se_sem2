@@ -1,0 +1,13 @@
+.tools/
+.secrets/
+**/kubeconfig
+infra/terraform/.terraform/
+*.tfstate*
+node_modules/
+__pycache__/
+
+# отчёт сдаётся отдельно
+*.docx
+*.pdf
+report/*.md
+report/build_human.py

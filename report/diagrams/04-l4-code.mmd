@@ -1,0 +1,67 @@
+classDiagram
+    direction LR
+    class ReservationAPI {
+      +reserve(order_id, buyer_id, items)
+      +stock(sku)
+      +audit()
+    }
+    class RESERVE_LUA {
+      <<Valkey script>>
+      KEYS stock:sku, buyer:id:sku
+      ARGV n, qty..., limit
+      1 ok / -1 out_of_stock / -2 buyer_limit
+    }
+    class Stock {
+      <<table stock>>
+      +sku text PK
+      +available int CHECK >= 0
+      +reserved int CHECK >= 0
+      +initial int
+    }
+    class Reservation {
+      <<table reservations>>
+      +order_id uuid PK
+      +buyer_id text
+      +items jsonb
+      +status ReservationStatus
+      +expires_at timestamptz
+    }
+    class ReservationStatus {
+      <<enum>>
+      ACTIVE
+      COMMITTED
+      RELEASED
+      EXPIRED
+    }
+    class Outbox {
+      <<table outbox>>
+      +id bigserial
+      +topic text
+      +key text
+      +payload jsonb
+      +published_at timestamptz
+    }
+    class ProcessedEvent {
+      <<table processed_events>>
+      +event_id uuid PK
+    }
+    class OutboxRelay {
+      +notify()
+      +run()
+    }
+    class Producer {
+      acks=all, idempotence
+      +send(topic, event)
+    }
+    class Consumer {
+      <<fm_common.run_consumer>>
+      at-least-once, commit after handle
+    }
+    ReservationAPI ..> RESERVE_LUA : 1. горячий рубеж
+    ReservationAPI ..> Stock : 2. источник истины
+    ReservationAPI ..> Reservation
+    ReservationAPI ..> Outbox : stage inventory.reserved
+    Reservation --> ReservationStatus
+    OutboxRelay ..> Outbox
+    OutboxRelay ..> Producer
+    Consumer ..> ProcessedEvent : dedup

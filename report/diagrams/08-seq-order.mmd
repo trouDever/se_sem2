@@ -1,0 +1,39 @@
+sequenceDiagram
+    autonumber
+    actor U as Покупатель
+    participant E as Edge (HAProxy, Istio GW)
+    participant R as Rate limit (Valkey)
+    participant O as order-service
+    participant I as inventory-service
+    participant V as Valkey
+    participant DB as PostgreSQL
+    participant K as Kafka
+    participant P as payment-service
+    U->>E: POST /api/v1/orders (Idempotency-Key)
+    E->>R: user_id, route=orders
+    R-->>E: OK
+    E->>O: POST /orders
+    O->>I: POST /inventory/reservations
+    I->>V: EVAL reserve.lua (остаток + лимит в руки)
+    alt товар есть
+        V-->>I: 1
+        I->>DB: UPDATE stock WHERE available >= qty, reservation + outbox
+        I-->>O: 201 ACTIVE, expires_at
+        O->>DB: INSERT order RESERVED + outbox (1 tx)
+        O-->>U: 201 order_id, pay_url
+        I--)K: inventory.reserved
+        O--)K: order.created
+    else нет остатка или лимит
+        V-->>I: -1 или -2
+        I-->>O: 409 или 422
+        O-->>U: 409 Нет в наличии / 422 Лимит 2 шт.
+    end
+    U->>E: POST /api/v1/payments (Idempotency-Key)
+    E->>P: POST /payments
+    P->>DB: INSERT payment + outbox
+    P-->>U: 201 SUCCEEDED
+    P--)K: payment.succeeded
+    K--)O: payment.succeeded
+    O->>DB: order PAID + outbox
+    O--)K: order.paid
+    K--)I: order.paid, резерв COMMITTED

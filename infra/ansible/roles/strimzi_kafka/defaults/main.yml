@@ -1,0 +1,14 @@
+kafka_namespace: kafka
+strimzi_chart_version: "1.2.0"
+kafka_cluster_name: flashmarket
+kafka_profile: default        # default: 3 брокера, RF=3, min ISR 2 | local: 1 брокер для однонодового стенда
+kafka_profiles:
+  default: { replicas: 3, rf: 3, min_isr: 2, heap: 1g, storage: 10Gi }
+  local:   { replicas: 1, rf: 1, min_isr: 1, heap: 384m, storage: 5Gi }
+kafka_partitions: 6
+kafka_retention_ms: 604800000   # 7 дней горячего хранения, дальше — холодный архив в MinIO
+kafka_topics:
+  - order.events
+  - payment.events
+  - inventory.events
+  - catalog.events

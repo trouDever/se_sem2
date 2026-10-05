@@ -1,0 +1,21 @@
+flowchart LR
+    buyer(["<b>Покупатель</b><br/>[Person]<br/>Смотрит акции, покупает<br/>дефицитные товары в 00:00"]):::person
+    seller(["<b>Продавец</b><br/>[Person]<br/>Товары, остатки,<br/>акционные цены"]):::person
+    fm["<b>FlashMarket</b><br/>[Software System]<br/>Маркетплейс, рассчитанный на пик<br/>Чёрной пятницы: витрина, резерв без<br/>overselling, оплата, уведомления, аналитика"]:::sys
+    idp["<b>Keycloak</b><br/>[External System]<br/>OIDC, выдаёт JWT"]:::ext
+    psp["<b>Платёжный провайдер</b><br/>[External System]<br/>Эмулируется в payment-service"]:::ext
+    mail["<b>Почтовый провайдер</b><br/>[External System]<br/>Эмулируется журналом<br/>notification-service"]:::ext
+    buyer -- "HTTPS через VIP" --> fm
+    seller -- "HTTPS через VIP" --> fm
+    buyer -. "вход (OIDC)" .-> idp
+    fm -- "проверка JWT (JWKS)" --> idp
+    fm -- "списания [HTTPS]" --> psp
+    fm -- "письма [SMTP/API]" --> mail
+
+    classDef person fill:#08427b,stroke:#052e56,color:#fff
+    classDef sys fill:#1168bd,stroke:#0b4884,color:#fff
+    classDef ext fill:#8a8a8a,stroke:#6b6b6b,color:#fff
+    classDef cont fill:#438dd5,stroke:#2e6295,color:#fff
+    classDef edge fill:#2f7d6d,stroke:#1f574b,color:#fff
+    classDef db fill:#f5f5f5,stroke:#444,color:#111
+    classDef plat fill:#5b6f8f,stroke:#3c4a60,color:#fff

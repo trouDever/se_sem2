@@ -1,0 +1,4 @@
+apiVersion: v2
+name: data-layer
+description: PostgreSQL x3, MongoDB, Valkey, MinIO для FlashMarket (namespace data)
+version: 0.1.0

@@ -1,0 +1,42 @@
+# Локальный Git-сервер для GitOps (ArgoCD читает репозиторий отсюда) и CI (Gitea Actions).
+apiVersion: v1
+kind: Namespace
+metadata: { name: git, labels: { app.kubernetes.io/part-of: flashmarket } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gitea-http, namespace: git }
+spec:
+  selector: { app: gitea }
+  ports: [ { name: http, port: 3000 } ]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: gitea, namespace: git }
+spec:
+  serviceName: gitea-http
+  replicas: 1
+  selector: { matchLabels: { app: gitea } }
+  template:
+    metadata: { labels: { app: gitea } }
+    spec:
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.24-rootless
+          env:
+            - { name: GITEA__security__INSTALL_LOCK, value: "true" }
+            - { name: GITEA__database__DB_TYPE, value: sqlite3 }
+            - { name: GITEA__server__ROOT_URL, value: "http://gitea-http.git.svc:3000/" }
+            - { name: GITEA__repository__ENABLE_PUSH_CREATE_USER, value: "true" }
+            - { name: GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE, value: "false" }
+            - { name: GITEA__actions__ENABLED, value: "true" }
+            - { name: GITEA__service__DISABLE_REGISTRATION, value: "true" }
+          ports: [ { containerPort: 3000 } ]
+          readinessProbe: { httpGet: { path: /api/healthz, port: 3000 }, periodSeconds: 10 }
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 384Mi } }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/gitea }
+            - { name: data, mountPath: /etc/gitea, subPath: conf }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 2Gi } } }

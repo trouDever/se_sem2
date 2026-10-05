@@ -1,0 +1,6 @@
+# mTLS между сервисами обязателен
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata: { name: default, namespace: flashmarket }
+spec:
+  mtls: { mode: STRICT }

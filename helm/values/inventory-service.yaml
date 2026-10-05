@@ -1,0 +1,4 @@
+name: inventory-service
+module: inventory
+database: { urlSecret: inventory-service-db }
+env: { RESERVATION_TTL_SECONDS: "900", PROMO_LIMIT_PER_BUYER: "2" }

@@ -1,0 +1,10 @@
+18:02:42 +1s start; payment victim=payment-service-779f55b78-6p8jn inventory victim=inventory-service-8588b4569-bp668
+18:04:12 +91s FAULT payment payment-service-779f55b78-6p8jn 100% for 120s
+{"error_rate":1.0,"until":1791223573.1419525}
+18:05:13 +152s FAULT inventory inventory-service-8588b4569-bp668 50% for 60s
+{"error_rate":0.5,"until":1791223573.696733}
+18:06:03 +202s KILL haproxy-1 (master)
+18:06:15 +214s VIP now on: 1 (haproxy-2 has VIP if 1)
+18:07:12 +271s START haproxy-1
+18:07:39 +298s VIP on haproxy-1: 1
+18:07:39 +298s chaos done

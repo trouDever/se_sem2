@@ -1,0 +1,44 @@
+# PostgreSQL 17: отдельный инстанс на каждый сервис (database per service). Учётки — из секретов Terraform.
+{{- range $svc := list "inventory" "order" "payment" }}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: pg-{{ $svc }}, namespace: data, labels: { app: pg-{{ $svc }} } }
+spec:
+  selector: { app: pg-{{ $svc }} }
+  ports: [ { name: pg, port: 5432 } ]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: pg-{{ $svc }}, namespace: data }
+spec:
+  serviceName: pg-{{ $svc }}
+  replicas: 1
+  selector: { matchLabels: { app: pg-{{ $svc }} } }
+  template:
+    metadata: { labels: { app: pg-{{ $svc }}, tier: data } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          args: ["-c", "max_connections=100", "-c", "shared_buffers=64MB", "-c", "synchronous_commit=on"]
+          envFrom: [ { secretRef: { name: {{ $svc }}-service-postgres } } ]
+          env: [ { name: PGDATA, value: /var/lib/postgresql/data/pgdata } ]
+          ports: [ { containerPort: 5432 } ]
+          readinessProbe: { exec: { command: ["pg_isready", "-U", "{{ $svc }}"] }, periodSeconds: 5 }
+          resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { memory: 256Mi } }
+          volumeMounts: [ { name: data, mountPath: /var/lib/postgresql/data } ]
+        - name: exporter
+          image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1
+          env:
+            - { name: DATA_SOURCE_URI, value: "localhost:5432/{{ $svc }}?sslmode=disable" }
+            - name: DATA_SOURCE_USER
+              valueFrom: { secretKeyRef: { name: {{ $svc }}-service-postgres, key: POSTGRES_USER } }
+            - name: DATA_SOURCE_PASS
+              valueFrom: { secretKeyRef: { name: {{ $svc }}-service-postgres, key: POSTGRES_PASSWORD } }
+          ports: [ { name: metrics, containerPort: 9187 } ]
+          resources: { requests: { cpu: 10m, memory: 24Mi }, limits: { memory: 64Mi } }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 2Gi } } }
+{{- end }}

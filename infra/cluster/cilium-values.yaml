@@ -1,0 +1,24 @@
+# Cilium как CNI: eBPF вместо kube-proxy, Hubble для наблюдаемости сети, совместимость с Istio sidecar
+kubeProxyReplacement: true
+k8sServiceHost: flashmarket-control-plane
+k8sServicePort: 6443
+ipam:
+  mode: kubernetes
+socketLB:
+  hostNamespaceOnly: true   # иначе socket-LB Cilium обходит iptables-редирект Istio sidecar
+cni:
+  exclusive: false
+operator:
+  replicas: 1
+  prometheus: { enabled: true }
+prometheus:
+  enabled: true
+hubble:
+  enabled: true
+  relay: { enabled: true }
+  ui: { enabled: false }
+  metrics:
+    enableOpenMetrics: true
+    enabled: [dns, drop, tcp, flow, "httpV2:exemplars=true"]
+rollOutCiliumPods: true
+devices: "eth+"   # eth0 — сеть kind, eth1 — сеть fm-edge с HAProxy (NodePort 30080 должен работать на обеих)

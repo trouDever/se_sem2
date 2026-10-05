@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-metrics
+  namespace: {{ kafka_namespace }}
+data:
+  kafka-metrics-config.yml: |
+    lowercaseOutputName: true
+    rules:
+      - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*)><>Value
+        name: kafka_server_$1_$2
+        type: GAUGE
+        labels: { clientId: "$3", topic: "$4", partition: "$5" }
+      - pattern: kafka.network<type=RequestMetrics, name=TotalTimeMs, request=(Produce|FetchConsumer)><>(\d+)thPercentile
+        name: kafka_network_request_total_time_ms
+        type: GAUGE
+        labels: { request: "$1", quantile: "0.$2" }
+      - pattern: kafka.server<type=(.+), name=(.+)><>(Count|Value)
+        name: kafka_server_$1_$2

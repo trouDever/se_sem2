@@ -1,0 +1,6 @@
+name: order-service
+module: order
+valkey: { enabled: false }
+database: { urlSecret: order-service-db }
+env: { INVENTORY_URL: "http://inventory-service" }
+route: { enabled: true, pathPrefix: /api/v1/orders, rewritePrefix: /orders }

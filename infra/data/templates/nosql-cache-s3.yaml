@@ -1,0 +1,101 @@
+# MongoDB 7 (каталог, журнал уведомлений), Valkey 8 (кэш, горячие остатки, rate limit), MinIO (холодный архив)
+apiVersion: v1
+kind: Service
+metadata: { name: mongodb, namespace: data }
+spec:
+  selector: { app: mongodb }
+  ports: [ { name: mongo, port: 27017 } ]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: mongodb, namespace: data }
+spec:
+  serviceName: mongodb
+  replicas: 1
+  selector: { matchLabels: { app: mongodb } }
+  template:
+    metadata: { labels: { app: mongodb, tier: data } }
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7
+          args: ["--wiredTigerCacheSizeGB", "0.25", "--bind_ip_all"]
+          ports: [ { containerPort: 27017 } ]
+          readinessProbe: { exec: { command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"] }, periodSeconds: 10, timeoutSeconds: 5 }
+          resources: { requests: { cpu: 50m, memory: 256Mi }, limits: { memory: 512Mi } }
+          volumeMounts: [ { name: data, mountPath: /data/db } ]
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 2Gi } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: valkey, namespace: data, labels: { app: valkey } }
+spec:
+  selector: { app: valkey }
+  ports:
+    - { name: valkey, port: 6379 }
+    - { name: metrics, port: 9121 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: valkey, namespace: data }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: valkey } }
+  template:
+    metadata: { labels: { app: valkey, tier: data } }
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:8.1-alpine
+          command: ["sh", "-c", "exec valkey-server --requirepass \"$VALKEY_PASSWORD\" --maxmemory 192mb --maxmemory-policy volatile-lru --save '' --appendonly no"]
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom: { secretKeyRef: { name: valkey-auth, key: password } }
+          ports: [ { containerPort: 6379 } ]
+          readinessProbe: { tcpSocket: { port: 6379 }, periodSeconds: 5 }
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { memory: 256Mi } }
+        - name: exporter
+          image: oliver006/redis_exporter:v1.74.0
+          env:
+            - { name: REDIS_ADDR, value: "redis://localhost:6379" }
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: valkey-auth, key: password } }
+          ports: [ { name: metrics, containerPort: 9121 } ]
+          resources: { requests: { cpu: 10m, memory: 16Mi }, limits: { memory: 48Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: minio, namespace: data }
+spec:
+  selector: { app: minio }
+  ports: [ { name: s3, port: 9000 } ]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: minio, namespace: data }
+spec:
+  serviceName: minio
+  replicas: 1
+  selector: { matchLabels: { app: minio } }
+  template:
+    metadata: { labels: { app: minio, tier: data } }
+    spec:
+      containers:
+        - name: minio
+          image: cgr.dev/chainguard/minio:latest
+          args: ["server", "/data"]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom: { secretKeyRef: { name: minio-auth, key: access_key } }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: minio-auth, key: secret_key } }
+            - { name: MINIO_PROMETHEUS_AUTH_TYPE, value: public }
+          ports: [ { containerPort: 9000 } ]
+          readinessProbe: { httpGet: { path: /minio/health/ready, port: 9000 }, periodSeconds: 10 }
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 384Mi } }
+          volumeMounts: [ { name: data, mountPath: /data } ]
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 5Gi } } }

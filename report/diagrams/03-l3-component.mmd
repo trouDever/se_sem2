@@ -1,0 +1,32 @@
+flowchart LR
+    ordsvc["<b>order-service</b><br/>[Container]"]:::cont
+    subgraph INV["inventory-service [Container: Python 3.12, FastAPI]"]
+      direction TB
+      api["<b>Reservation API</b><br/>[FastAPI router]<br/>POST /inventory/reservations<br/>идемпотентно по order_id"]:::cont
+      eng["<b>ReservationEngine</b><br/>[Lua в Valkey]<br/>остаток + лимит в руки,<br/>всё или ничего"]:::cont
+      repo["<b>StockRepository</b><br/>[asyncpg]<br/>UPDATE … WHERE available ≥ qty,<br/>reservation + outbox в 1 tx"]:::cont
+      relay["<b>OutboxRelay</b><br/>[asyncio task]<br/>FOR UPDATE SKIP LOCKED"]:::cont
+      cons["<b>OrderEventsConsumer</b><br/>[aiokafka, group inventory-service]<br/>order.paid → commit,<br/>order.cancelled → release"]:::cont
+      sw["<b>ExpirationSweeper</b><br/>[каждые 10 с]<br/>возврат просроченных резервов"]:::cont
+      audit["<b>Audit API</b><br/>GET /inventory/audit<br/>проверка overselling"]:::cont
+    end
+    vk[("Valkey")]:::db
+    pg[("PostgreSQL inventory")]:::db
+    k[["Kafka"]]:::cont
+    ordsvc -->|HTTP| api --> eng -->|EVALSHA| vk
+    api --> repo -->|SQL| pg
+    relay -->|SELECT outbox| pg
+    relay -->|inventory.*| k
+    k -->|order.*| cons --> repo
+    cons -->|INCRBY при отмене| vk
+    sw --> repo
+    sw -->|INCRBY| vk
+    audit --> pg
+
+    classDef person fill:#08427b,stroke:#052e56,color:#fff
+    classDef sys fill:#1168bd,stroke:#0b4884,color:#fff
+    classDef ext fill:#8a8a8a,stroke:#6b6b6b,color:#fff
+    classDef cont fill:#438dd5,stroke:#2e6295,color:#fff
+    classDef edge fill:#2f7d6d,stroke:#1f574b,color:#fff
+    classDef db fill:#f5f5f5,stroke:#444,color:#111
+    classDef plat fill:#5b6f8f,stroke:#3c4a60,color:#fff

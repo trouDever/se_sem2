@@ -1,0 +1,17 @@
+# Задание 2.2: App of Apps. Корневое приложение следит за gitops/apps и создаёт из него приложения сервисов.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: http://gitea-http.git.svc:3000/fm/flashmarket.git
+    targetRevision: main
+    path: gitops/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

@@ -1,0 +1,124 @@
+# Задания 3.2/3.3: Istio Gateway (Gateway API) + глобальный rate limit (envoyproxy/ratelimit, счётчики в Valkey).
+# Маршруты (HTTPRoute) генерирует Helm-чарт каждого сервиса.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public
+  namespace: edge
+  annotations:
+    networking.istio.io/service-type: ClusterIP
+spec:
+  gatewayClassName: istio
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes: { namespaces: { from: All } }
+---
+# Вход для внешнего HAProxy: стабильный NodePort 30080 на поды шлюза
+apiVersion: v1
+kind: Service
+metadata: { name: public-nodeport, namespace: edge }
+spec:
+  type: NodePort
+  selector: { gateway.networking.k8s.io/gateway-name: public }
+  ports: [ { name: http, port: 80, targetPort: 80, nodePort: 30080 } ]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: ratelimit-config, namespace: edge }
+data:
+  config.yaml: |
+    domain: flashmarket
+    descriptors:
+      # не больше 120 запросов в минуту на покупателя (антибот)
+      - key: user_id
+        rate_limit: { unit: minute, requests_per_unit: 120 }
+      # защита оформления заказов всей системы: 300 запросов/с на /api/v1/orders
+      - key: header_match
+        value: orders
+        rate_limit: { unit: second, requests_per_unit: 300 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ratelimit, namespace: edge, labels: { app: ratelimit } }
+spec:
+  selector: { app: ratelimit }
+  ports:
+    - { name: http, port: 8080 }
+    - { name: grpc, port: 8081, appProtocol: grpc }
+    - { name: metrics, port: 9090 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: ratelimit, namespace: edge }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: ratelimit } }
+  template:
+    metadata: { labels: { app: ratelimit } }
+    spec:
+      containers:
+        - name: ratelimit
+          image: envoyproxy/ratelimit:bd88831c
+          command: ["/bin/ratelimit"]
+          env:
+            - { name: LOG_LEVEL, value: warn }
+            - { name: REDIS_SOCKET_TYPE, value: tcp }
+            - { name: REDIS_URL, value: "valkey.data.svc:6379" }
+            - name: REDIS_AUTH
+              valueFrom: { secretKeyRef: { name: valkey-auth, key: password } }
+            - { name: USE_STATSD, value: "false" }
+            - { name: USE_PROMETHEUS, value: "true" }
+            - { name: PROMETHEUS_ADDR, value: ":9090" }
+            - { name: RUNTIME_ROOT, value: /data }
+            - { name: RUNTIME_SUBDIRECTORY, value: ratelimit }
+            - { name: RUNTIME_WATCH_ROOT, value: "false" }
+            - { name: RUNTIME_IGNOREDOTFILES, value: "true" }
+          ports: [ { containerPort: 8080 }, { containerPort: 8081 }, { containerPort: 9090 } ]
+          resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 96Mi } }
+          volumeMounts: [ { name: config, mountPath: /data/ratelimit/config } ]
+      volumes:
+        - name: config
+          configMap: { name: ratelimit-config }
+---
+# Подключение RLS к подам шлюза: HTTP-фильтр ratelimit перед роутером + действия, формирующие дескрипторы
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata: { name: gateway-ratelimit, namespace: edge }
+spec:
+  workloadSelector:
+    labels: { gateway.networking.k8s.io/gateway-name: public }
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener: { filterChain: { filter: { name: envoy.filters.network.http_connection_manager,
+                                             subFilter: { name: envoy.filters.http.router } } } }
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.ratelimit
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
+            domain: flashmarket
+            failure_mode_deny: false          # fail-open: лимитер не должен становиться точкой отказа
+            timeout: 0.25s
+            enable_x_ratelimit_headers: DRAFT_VERSION_03
+            rate_limit_service:
+              grpc_service:
+                envoy_grpc: { cluster_name: outbound|8081||ratelimit.edge.svc.cluster.local }
+                timeout: 0.25s
+              transport_api_version: V3
+    - applyTo: VIRTUAL_HOST
+      match: { context: GATEWAY }
+      patch:
+        operation: MERGE
+        value:
+          rate_limits:
+            - actions:
+                - request_headers: { header_name: x-user-id, descriptor_key: user_id }
+            - actions:
+                - header_value_match:
+                    descriptor_value: orders
+                    headers: [ { name: ":path", string_match: { prefix: /api/v1/orders } } ]

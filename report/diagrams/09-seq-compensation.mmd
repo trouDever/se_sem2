@@ -1,0 +1,28 @@
+sequenceDiagram
+    participant P as payment-service
+    participant K as Kafka
+    participant O as order-service
+    participant I as inventory-service
+    participant V as Valkey
+    participant N as notification-service
+    Note over P,N: 2a. PSP отклонил платёж
+    P--)K: payment.failed
+    K--)O: payment.failed
+    O->>O: RESERVED -> CANCELLED (+ outbox)
+    O--)K: order.cancelled
+    K--)I: order.cancelled
+    I->>I: reservation RELEASED, available += qty
+    I->>V: INCRBY stock, DECRBY buyer limit
+    I--)K: inventory.released (reason=released)
+    K--)N: письмо: оплата не прошла
+    Note over P,N: UC-3. Резерв истёк (15 мин без оплаты)
+    loop каждые 10 с
+        I->>I: SELECT reservations WHERE ACTIVE AND expires_at < now()
+    end
+    I->>I: ACTIVE -> EXPIRED, available += qty
+    I->>V: INCRBY stock
+    I--)K: inventory.released (reason=expired)
+    K--)O: inventory.released
+    O->>O: RESERVED -> EXPIRED
+    O--)K: order.expired
+    K--)N: письмо: время резерва истекло

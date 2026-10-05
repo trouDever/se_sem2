@@ -1,0 +1,104 @@
+# victoria-metrics-k8s-stack: VictoriaMetrics + vmagent + vmalert + Alertmanager + Grafana
+# Бюджет памяти однонодового стенда ~1 GB на всю наблюдаемость.
+fullnameOverride: vm
+defaultDashboards: { enabled: false }
+defaultRules: { create: false }
+kube-state-metrics: { enabled: true }
+prometheus-node-exporter: { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeEtcd: { enabled: false }
+kubeProxy: { enabled: false }
+coreDns: { enabled: false }
+
+vmsingle:
+  enabled: true
+  spec:
+    retentionPeriod: 7d
+    resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { cpu: "1", memory: 512Mi } }
+    storage: { resources: { requests: { storage: 5Gi } } }
+
+vmagent:
+  enabled: true
+  spec:
+    scrapeInterval: 10s
+    resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { cpu: "1", memory: 256Mi } }
+    inlineScrapeConfig: |
+      # 1) поды с аннотациями prometheus.io/* (сервисы — через merge-метрики Istio sidecar на :15020,
+      #    шлюз Istio, Cilium agent)
+      - job_name: pods-annotated
+        kubernetes_sd_configs: [ { role: pod } ]
+        relabel_configs:
+          - { source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape], regex: "true", action: keep }
+          - { source_labels: [__meta_kubernetes_pod_phase], regex: Running, action: keep }
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: '([^:]+)(?::\d+)?;(\d+)'
+            replacement: '$1:$2'
+            target_label: __address__
+          - { source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path], regex: (.+), target_label: __metrics_path__ }
+          - { source_labels: [__meta_kubernetes_namespace], target_label: namespace }
+          - { source_labels: [__meta_kubernetes_pod_name], target_label: pod }
+          - { source_labels: [__meta_kubernetes_pod_label_app], target_label: app }
+      # 2) экспортеры по имени порта: Kafka JMX (tcp-prometheus), kafka-exporter, rate limiter,
+      #    Valkey/PostgreSQL exporters, Hubble
+      - job_name: pods-metrics-port
+        kubernetes_sd_configs: [ { role: pod } ]
+        relabel_configs:
+          - { source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape], regex: "true", action: drop }
+          - { source_labels: [__meta_kubernetes_pod_container_port_name], regex: "metrics|tcp-prometheus|hubble-metrics", action: keep }
+          - { source_labels: [__meta_kubernetes_pod_phase], regex: Running, action: keep }
+          - { source_labels: [__meta_kubernetes_namespace], target_label: namespace }
+          - { source_labels: [__meta_kubernetes_pod_name], target_label: pod }
+          - { source_labels: [__meta_kubernetes_pod_label_app], target_label: app }
+          - { source_labels: [__meta_kubernetes_pod_container_name], target_label: container }
+      # 3) пара HAProxy вне кластера (docker-сеть fm-edge)
+      - job_name: haproxy
+        static_configs:
+          - targets: ["172.30.0.11:8404", "172.30.0.12:8404"]
+      - job_name: ratelimit
+        kubernetes_sd_configs: [ { role: pod, namespaces: { names: [edge] } } ]
+        relabel_configs:
+          - { source_labels: [__meta_kubernetes_pod_label_app], regex: ratelimit, action: keep }
+          - { source_labels: [__meta_kubernetes_pod_container_port_number], regex: "9090", action: keep }
+          - { source_labels: [__meta_kubernetes_pod_name], target_label: pod }
+
+vmalert:
+  enabled: true
+  spec:
+    evaluationInterval: 30s
+    resources: { requests: { cpu: 20m, memory: 48Mi }, limits: { memory: 128Mi } }
+
+alertmanager:
+  enabled: true
+  spec:
+    resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 96Mi } }
+  config:
+    route:
+      receiver: webhook
+      group_by: [alertname, severity]
+      group_wait: 30s
+      repeat_interval: 1h
+    receivers:
+      - name: webhook
+        webhook_configs:
+          - url: http://alert-sink.observability.svc:8080/
+            send_resolved: true
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: NodePort
+    nodePort: 30300
+  resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { memory: 512Mi } }
+  # первый старт Grafana 12 (миграции SQLite) на нагруженной ноде длится несколько минут
+  livenessProbe: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 600, periodSeconds: 20, failureThreshold: 10 }
+  grafana.ini:
+    auth.anonymous: { enabled: true, org_role: Viewer }
+    dashboards: { default_home_dashboard_path: /tmp/dashboards/flashmarket.json }
+  sidecar:
+    dashboards: { enabled: true, label: grafana_dashboard, folder: /tmp/dashboards, searchNamespace: observability }
+    datasources: { enabled: true }

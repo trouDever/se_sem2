@@ -1,0 +1,16 @@
+# Задание 6.2: искусственный отказ (50% ответов 503) во время нагрузочного теста.
+# Альтернатива: kubectl scale / kill одного pod'а, либо env FAIL_RATE=0.5 в сервисе.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: payment-service
+  namespace: ticketflow
+spec:
+  hosts: [ payment-service ]
+  http:
+    - fault:
+        abort:
+          percentage: { value: 50 }
+          httpStatus: 503
+      route:
+        - destination: { host: payment-service }

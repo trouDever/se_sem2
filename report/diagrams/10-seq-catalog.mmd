@@ -1,0 +1,18 @@
+sequenceDiagram
+    actor U as Покупатель
+    participant G as Istio Gateway
+    participant C as catalog-service
+    participant V as Valkey
+    participant M as MongoDB
+    U->>G: GET /api/v1/catalog/products?promo=true
+    G->>C: GET /catalog/products
+    C->>V: GET cat:list:...
+    alt cache hit
+        V-->>C: товары
+    else cache miss
+        C->>M: find(promo).limit(20)
+        C->>V: SET cat:list:... EX 30+jitter
+    end
+    C->>V: MGET stock:BF-001..BF-020 (горячие остатки inventory)
+    C-->>U: 200 товары + in_stock
+    Note over C,V: order.paid / order.cancelled / price-changed -> DEL cat:list:*

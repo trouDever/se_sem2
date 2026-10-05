@@ -1,0 +1,59 @@
+# Задание 2.3: Kafka в K8s под оператором Strimzi. Брокерами управляет StrimziPodSet
+# (аналог StatefulSet: стабильные имена/тома, перезапуск брокеров по одному).
+- name: Resolve profile
+  ansible.builtin.set_fact:
+    kp: "{{ kafka_profiles[kafka_profile] }}"
+
+- name: Namespace
+  kubernetes.core.k8s:
+    api_version: v1
+    kind: Namespace
+    name: "{{ kafka_namespace }}"
+    state: present
+
+- name: Strimzi operator (Helm, OCI)
+  kubernetes.core.helm:
+    name: strimzi-operator
+    chart_ref: oci://quay.io/strimzi-helm/strimzi-kafka-operator
+    chart_version: "{{ strimzi_chart_version }}"
+    release_namespace: "{{ kafka_namespace }}"
+    values:
+      resources: { requests: { cpu: 50m, memory: 256Mi }, limits: { memory: 384Mi } }
+    wait: true
+
+- name: Kafka metrics ConfigMap, node pool and cluster (server-side apply)
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ kafka_namespace }}"
+    server_side_apply: { field_manager: flashmarket-kafka-role, force_conflicts: true }
+    template: "{{ item }}"
+  loop: [kafka-metrics.yaml.j2, kafka-cluster.yaml.j2]
+
+- name: Wait for Kafka Ready
+  kubernetes.core.k8s_info:
+    api_version: kafka.strimzi.io/v1
+    kind: Kafka
+    name: "{{ kafka_cluster_name }}"
+    namespace: "{{ kafka_namespace }}"
+    wait: true
+    wait_condition: { type: Ready, status: "True" }
+    wait_timeout: 1200
+
+- name: Topics
+  kubernetes.core.k8s:
+    state: present
+    server_side_apply: { field_manager: flashmarket-kafka-role, force_conflicts: true }
+    definition:
+      apiVersion: kafka.strimzi.io/v1
+      kind: KafkaTopic
+      metadata:
+        name: "{{ item }}"
+        namespace: "{{ kafka_namespace }}"
+        labels: { strimzi.io/cluster: "{{ kafka_cluster_name }}" }
+      spec:
+        partitions: "{{ kafka_partitions }}"
+        replicas: "{{ kp.rf }}"
+        config:
+          min.insync.replicas: "{{ kp.min_isr }}"
+          retention.ms: "{{ kafka_retention_ms }}"
+  loop: "{{ kafka_topics }}"

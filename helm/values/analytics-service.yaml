@@ -1,0 +1,6 @@
+name: analytics-service
+module: analytics
+replicas: 1
+s3: { endpoint: "minio.data.svc:9000", secret: minio-auth }
+env: { ARCHIVE_FLUSH_SECONDS: "30" }
+route: { enabled: true, pathPrefix: /api/v1/analytics, rewritePrefix: /analytics }

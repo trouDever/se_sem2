@@ -1,0 +1,9 @@
+fastapi==0.118.*
+uvicorn[standard]==0.37.*
+aiokafka==0.12.*
+asyncpg==0.30.*
+pymongo==4.15.*
+valkey==6.1.*
+httpx==0.28.*
+minio==7.2.*
+prometheus-client==0.23.*

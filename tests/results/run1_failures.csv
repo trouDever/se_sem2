@@ -1,0 +1,16 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,/catalog/products/{sku},RemoteDisconnected('Remote end closed connection without response'),2,2026-10-05T18:06:05Z,2026-10-05T18:06:05Z
+GET,/orders (mine),"ConnectionRefusedError(111, 'Connection refused')",12,2026-10-05T18:06:05Z,2026-10-05T18:06:07Z
+GET,BOT /catalog,"ConnectionResetError(104, 'Connection reset by peer')",3,2026-10-05T18:07:42Z,2026-10-05T18:07:42Z
+GET,BOT /catalog,RemoteDisconnected('Remote end closed connection without response'),1,2026-10-05T18:06:05Z,2026-10-05T18:06:05Z
+POST,/payments,RemoteDisconnected('Remote end closed connection without response'),4,2026-10-05T18:06:05Z,2026-10-05T18:06:05Z
+GET,/catalog/products/{sku},"ConnectionRefusedError(111, 'Connection refused')",26,2026-10-05T18:06:05Z,2026-10-05T18:06:07Z
+GET,/catalog/products?promo,"ConnectionRefusedError(111, 'Connection refused')",60,2026-10-05T18:06:05Z,2026-10-05T18:06:09Z
+GET,/catalog/products?promo,"ConnectionResetError(104, 'Connection reset by peer')",28,2026-10-05T18:07:42Z,2026-10-05T18:07:42Z
+GET,/catalog/products?promo,HTTPError('503 Server Error: Service Unavailable for url: /catalog/products?promo'),1,2026-10-05T18:06:17Z,2026-10-05T18:06:17Z
+GET,/catalog/products/{sku},"ConnectionResetError(104, 'Connection reset by peer')",16,2026-10-05T18:07:42Z,2026-10-05T18:07:42Z
+POST,/orders,CatchResponseError('0'),26,2026-10-05T18:06:05Z,2026-10-05T18:07:42Z
+GET,BOT /catalog,"ConnectionRefusedError(111, 'Connection refused')",57,2026-10-05T18:06:05Z,2026-10-05T18:06:07Z
+GET,/orders (mine),"ConnectionResetError(104, 'Connection reset by peer')",5,2026-10-05T18:07:42Z,2026-10-05T18:07:42Z
+POST,/payments,HTTPError('503 Server Error: Service Unavailable for url: /payments'),14,2026-10-05T18:04:13Z,2026-10-05T18:05:59Z
+GET,/catalog/products?promo,RemoteDisconnected('Remote end closed connection without response'),1,2026-10-05T18:06:05Z,2026-10-05T18:06:05Z

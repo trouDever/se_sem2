@@ -1,0 +1,40 @@
+GET      /catalog/products?promo                                                         6767    91(1.34%) |    129       1   18253     16 |   22.63        0.30
+POST     /orders                                                                         2254    26(1.15%) |    177       1   18520     51 |    7.54        0.09
+GET      /orders (mine)                                                                  1132    18(1.59%) |    120       1   11945     15 |    3.79        0.06
+POST     /payments                                                                       1770    18(1.02%) |     98       7    4695     71 |    5.92        0.06
+GET      BOT /catalog                                                                    7915    61(0.77%) |     28       1   18434      7 |   26.47        0.20
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                     23325   259(1.11%) |     94       1   18520     14 |   78.00        0.87
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      /catalog/products/{sku}                                                                14     19     24     30     77    260    930   1900  12000  12000  12000   3487
+GET      /catalog/products?promo                                                                16     22     28     35     84    260   1000   2100  12000  18000  18000   6767
+POST     /orders                                                                                51     65     79     90    150    340   1400   2300  14000  19000  19000   2254
+GET      /orders (mine)                                                                         15     19     24     29     63    240    990   1900  12000  12000  12000   1132
+POST     /payments                                                                              71     79     84     89    110    160    330    750   4600   4700   4700   1770
+GET      BOT /catalog                                                                            7      9     11     13     22     39     95    170   5600  18000  18000   7915
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                             14     23     38     50     82    160    590   1600  12000  18000  19000  23325
+
+Error report
+# occurrences      Error                                                                                               
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+14                 POST /payments: HTTPError('503 Server Error: Service Unavailable for url: /payments')               
+4                  POST /payments: RemoteDisconnected('Remote end closed connection without response')                 
+1                  GET BOT /catalog: RemoteDisconnected('Remote end closed connection without response')               
+1                  GET /catalog/products?promo: RemoteDisconnected('Remote end closed connection without response')    
+2                  GET /catalog/products/{sku}: RemoteDisconnected('Remote end closed connection without response')    
+26                 POST /orders: 0                                                                                     
+12                 GET /orders (mine): ConnectionRefusedError(111, 'Connection refused')                               
+57                 GET BOT /catalog: ConnectionRefusedError(111, 'Connection refused')                                 
+60                 GET /catalog/products?promo: ConnectionRefusedError(111, 'Connection refused')                      
+26                 GET /catalog/products/{sku}: ConnectionRefusedError(111, 'Connection refused')                      
+1                  GET /catalog/products?promo: HTTPError('503 Server Error: Service Unavailable for url: /catalog/products?promo')
+29                 GET /catalog/products?promo: ConnectionResetError(104, 'Connection reset by peer')                  
+3                  GET BOT /catalog: ConnectionResetError(104, 'Connection reset by peer')                             
+6                  GET /orders (mine): ConnectionResetError(104, 'Connection reset by peer')                           
+17                 GET /catalog/products/{sku}: ConnectionResetError(104, 'Connection reset by peer')                  
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+

@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  labels: { app: {{ .Values.name }}, app.kubernetes.io/part-of: flashmarket }
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: {{ .Values.name }} }
+  template:
+    metadata:
+      labels: { app: {{ .Values.name }}, version: {{ .Values.image.tag | quote }} }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.port }}"
+        prometheus.io/path: /metrics
+        # из статистики Envoy оставляем только то, что нужно для circuit breaker'а и повторов
+        proxy.istio.io/config: |
+          proxyStatsMatcher:
+            inclusionRegexps: [".*outlier_detection.*", ".*upstream_rq_retry.*", ".*upstream_rq_pending_overflow.*", ".*upstream_cx_overflow.*"]
+    spec:
+      serviceAccountName: {{ .Values.name }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports: [ { name: http, containerPort: {{ .Values.port }} } ]
+          env:
+            - { name: SERVICE, value: {{ .Values.module | quote }} }
+            - { name: SERVICE_NAME, value: {{ .Values.name | quote }} }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, value: {{ .Values.kafka.bootstrap | quote }} }
+            {{- if .Values.valkey.enabled }}
+            - { name: VALKEY_URL, value: {{ .Values.valkey.url | quote }} }
+            - name: VALKEY_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.valkey.secret }}, key: password } }
+            {{- end }}
+            {{- if .Values.database.urlSecret }}
+            - name: DB_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.database.urlSecret }}, key: url } }
+            {{- else if .Values.database.url }}
+            - { name: DB_URL, value: {{ .Values.database.url | quote }} }
+            {{- end }}
+            {{- range $k, $v := .Values.env }}
+            - { name: {{ $k }}, value: {{ $v | quote }} }
+            {{- end }}
+            {{- if .Values.s3 }}
+            - { name: S3_ENDPOINT, value: {{ .Values.s3.endpoint | quote }} }
+            - name: S3_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.s3.secret }}, key: access_key } }
+            - name: S3_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.s3.secret }}, key: secret_key } }
+            {{- end }}
+          readinessProbe: { httpGet: { path: /health/ready, port: http }, periodSeconds: 5, failureThreshold: 2 }
+          livenessProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 10, initialDelaySeconds: 20 }
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}
+  labels: { app: {{ .Values.name }} }
+spec:
+  selector: { app: {{ .Values.name }} }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Values.name }}
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: {{ .Values.name }} }
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: {{ .Values.autoscaling.targetCPU }} } }
+{{- end }}
