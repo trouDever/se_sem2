@@ -2,8 +2,8 @@
 name: service
 module: catalog                # какой модуль запускать из общего образа (SERVICE)
 image:
-  repository: flashmarket/app
-  tag: "0.1.0"
+  repository: registry.ci:5000/flashmarket/app
+  tag: "b1632e6a7e"
   pullPolicy: IfNotPresent
 replicas: 2
 port: 8080
