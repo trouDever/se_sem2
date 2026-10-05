@@ -50,8 +50,8 @@ spec:
             - name: S3_SECRET_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.s3.secret }}, key: secret_key } }
             {{- end }}
-          readinessProbe: { httpGet: { path: /health/ready, port: http }, periodSeconds: 5, failureThreshold: 2 }
-          livenessProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 10, initialDelaySeconds: 20 }
+          readinessProbe: { httpGet: { path: /health/ready, port: http }, periodSeconds: 5, timeoutSeconds: 5, failureThreshold: 3 }
+          livenessProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 15, timeoutSeconds: 5, failureThreshold: 4, initialDelaySeconds: 30 }
           resources: {{- toYaml .Values.resources | nindent 12 }}
 ---
 apiVersion: v1

@@ -5,7 +5,7 @@ image:
   repository: registry.ci:5000/flashmarket/app
   tag: "b1632e6a7e"
   pullPolicy: IfNotPresent
-replicas: 2
+replicas: 1                    # однонодовый стенд; в production 2+ и HPA
 port: 8080
 resources:
   requests: { cpu: 50m, memory: 96Mi }
