@@ -1,0 +1,58 @@
+# Задание 5.2: Build (Kaniko) -> Push в локальный registry -> Update Helm chart -> ArgoCD Sync.
+# Запускается на self-hosted раннере в кластере (метка k8s) при изменении кода сервисов.
+name: deliver
+on:
+  push:
+    branches: [main]
+    paths: ["services/**"]
+  workflow_dispatch:
+
+jobs:
+  deliver:
+    runs-on: k8s
+    env:
+      REPO: http://gitea-http.git.svc:3000/fm/flashmarket.git
+      IMAGE: registry.ci:5000/flashmarket/app
+    steps:
+      - name: plan
+        run: |
+          TAG="${GITHUB_SHA:0:10}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "commit $GITHUB_SHA -> image tag $TAG"
+
+      - name: build and push (Kaniko)
+        run: |
+          rm -rf src && git clone -q "$REPO" src && cd src && git checkout -q "$GITHUB_SHA"
+          sed -e "s/__TAG__/$TAG/g" -e "s/__SHA__/$GITHUB_SHA/g" infra/ci/kaniko-job.yaml | kubectl apply -f -
+          if ! kubectl -n ci wait --for=condition=complete "job/build-$TAG" --timeout=1200s; then
+            kubectl -n ci logs "job/build-$TAG" --all-containers --tail=50
+            exit 1
+          fi
+          curl -sf "http://registry.ci.svc.cluster.local:5000/v2/flashmarket/app/tags/list"
+
+      - name: update chart
+        run: |
+          rm -rf gitops && git clone -q "http://fm:${{ secrets.CI_PUSH_TOKEN }}@gitea-http.git.svc:3000/fm/flashmarket.git" gitops
+          cd gitops
+          sed -i -e "s#^  repository: .*#  repository: $IMAGE#" -e "s#^  tag: .*#  tag: \"$TAG\"#" helm/microservice/values.yaml
+          sed -i -e "s#^appVersion: .*#appVersion: \"$TAG\"#" helm/microservice/Chart.yaml
+          git -c user.name=ci-bot -c user.email=ci@flashmarket.local commit -qam "ci: image $TAG [skip ci]"
+          git push -q origin HEAD:main
+
+      - name: argocd sync
+        run: |
+          for app in catalog inventory order payment notification analytics; do
+            kubectl -n argocd annotate application "$app-service" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
+          done
+          for app in catalog inventory order payment notification analytics; do
+            for i in $(seq 1 90); do
+              img=$(kubectl -n flashmarket get deploy "$app-service" -o jsonpath='{.spec.template.spec.containers[0].image}')
+              [ "$img" = "$IMAGE:$TAG" ] && break
+              sleep 5
+            done
+            echo "$app-service -> $img"
+            [ "$img" = "$IMAGE:$TAG" ] || exit 1
+          done
+          for app in catalog inventory order payment notification analytics; do
+            kubectl -n flashmarket rollout status "deploy/$app-service" --timeout=600s
+          done

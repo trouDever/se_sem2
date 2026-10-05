@@ -1,0 +1,41 @@
+# Шаблон сборки образа (задание 5.2). Пайплайн подставляет __TAG__ и __SHA__ и применяет Job.
+# initContainer клонирует нужный коммит из Gitea, Kaniko собирает образ без Docker-демона
+# и пушит его в локальный registry; слои кэшируются в том же registry.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-__TAG__
+  namespace: ci
+  labels: { app: kaniko-build }
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata: { labels: { app: kaniko-build } }
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: checkout
+          image: alpine/git:2.47.2
+          command: [sh, -c]
+          args:
+            - git clone -q http://gitea-http.git.svc:3000/fm/flashmarket.git /workspace && cd /workspace && git checkout -q __SHA__
+          volumeMounts: [ { name: workspace, mountPath: /workspace } ]
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:v1.23.2
+          args:
+            - --context=dir:///workspace/services
+            - --dockerfile=/workspace/services/Dockerfile
+            - --destination=registry.ci.svc.cluster.local:5000/flashmarket/app:__TAG__
+            - --cache=true
+            - --cache-repo=registry.ci.svc.cluster.local:5000/flashmarket/cache
+            - --insecure
+            - --skip-tls-verify
+            - --snapshot-mode=redo
+            - --verbosity=warn
+          resources: { requests: { cpu: 200m, memory: 256Mi }, limits: { memory: 1Gi } }
+          volumeMounts: [ { name: workspace, mountPath: /workspace } ]
+      volumes:
+        - name: workspace
+          emptyDir: {}

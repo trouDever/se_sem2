@@ -1,0 +1,6 @@
+# Раннер Gitea Actions + инструменты для шагов пайплайна (bash, git, kubectl)
+FROM gitea/act_runner:0.6.1
+USER root
+RUN apk add --no-cache bash git curl \
+ && curl -fsSL -o /usr/local/bin/kubectl https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl \
+ && chmod +x /usr/local/bin/kubectl

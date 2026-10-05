@@ -46,11 +46,24 @@ async def with_stock(items):
     return items
 
 
+invalidate = asyncio.Event()
+
+
 async def on_event(topic, ev):
-    # Оплаченный/отменённый заказ меняет остаток и топ продаж -> сбрасываем кэш списков
-    keys = [k async for k in vk.scan_iter("cat:list:*")]
-    if keys:
-        await vk.delete(*keys)
+    # Оплаченный/отменённый заказ меняет остаток и топ продаж -> помечаем кэш списков устаревшим.
+    # Раньше SCAN+DEL выполнялся на каждое событие, и консьюмер отставал под нагрузкой (lag до 39).
+    invalidate.set()
+
+
+async def cache_invalidator():
+    """Сбрасывает кэш списков не чаще раза в секунду, сколько бы событий ни пришло."""
+    while True:
+        await invalidate.wait()
+        invalidate.clear()
+        keys = [k async for k in vk.scan_iter("cat:list:*")]
+        if keys:
+            await vk.delete(*keys)
+        await asyncio.sleep(1)
 
 
 @asynccontextmanager
@@ -60,9 +73,11 @@ async def lifespan(app):
     vk = valkey.from_url(VALKEY_URL, password=os.getenv("VALKEY_PASSWORD"), decode_responses=True)
     await seed()
     await producer.start()
-    task = asyncio.create_task(run_consumer(["order.events"], "catalog-service", on_event))
+    tasks = [asyncio.create_task(run_consumer(["order.events"], "catalog-service", on_event)),
+             asyncio.create_task(cache_invalidator())]
     yield
-    task.cancel()
+    for t in tasks:
+        t.cancel()
     await producer.stop()
 
 

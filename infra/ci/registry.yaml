@@ -1,0 +1,42 @@
+# Локальный registry образов (задание 5.2). Kaniko пушит сюда по DNS-имени сервиса,
+# а containerd на ноде тянет образы по фиксированному ClusterIP (см. node-registry.sh).
+apiVersion: v1
+kind: Namespace
+metadata: { name: ci, labels: { app.kubernetes.io/part-of: flashmarket } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: registry-data, namespace: ci }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: registry, namespace: ci }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: registry } }
+  template:
+    metadata: { labels: { app: registry } }
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          env:
+            - { name: REGISTRY_STORAGE_DELETE_ENABLED, value: "true" }
+          ports: [ { containerPort: 5000 } ]
+          readinessProbe: { httpGet: { path: /v2/, port: 5000 }, periodSeconds: 5 }
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 128Mi } }
+          volumeMounts: [ { name: data, mountPath: /var/lib/registry } ]
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: registry-data }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: registry, namespace: ci }
+spec:
+  clusterIP: 10.96.200.200
+  selector: { app: registry }
+  ports: [ { name: http, port: 5000 } ]
