@@ -1,0 +1,19 @@
+# Helm values для cluster-autoscaler с провайдером kwok
+cloudProvider: kwok
+kwokConfigMapName: kwok-provider-config      # содержимое заменяется kwok-provider.yaml после установки
+autoDiscovery:
+  clusterName: kind-flashmarket        # kwok-провайдер это поле не использует, но чарт требует значение
+image:
+  repository: registry.k8s.io/autoscaling/cluster-autoscaler
+  tag: v1.35.0
+extraArgs:
+  scan-interval: 10s
+  scale-down-enabled: true
+  scale-down-unneeded-time: 1m         # быстрые значения для демонстрации на стенде
+  scale-down-delay-after-add: 1m
+  scale-down-delay-after-delete: 0s
+  skip-nodes-with-local-storage: false
+  expander: least-waste
+resources:
+  requests: { cpu: 20m, memory: 64Mi }
+  limits: { memory: 256Mi }

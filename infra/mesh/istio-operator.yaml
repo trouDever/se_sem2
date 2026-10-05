@@ -1,0 +1,36 @@
+# Установка Istio: istioctl install -y -f infra/mesh/istio-operator.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  profile: minimal
+  meshConfig:
+    enablePrometheusMerge: true
+    defaultConfig:
+      concurrency: 1
+    # трейсы из Envoy уходят по OTLP/HTTP прямо в VictoriaTraces
+    extensionProviders:
+      - name: otel-vtraces
+        opentelemetry:
+          service: vtraces-otlp.observability.svc.cluster.local
+          port: 10428
+          http:
+            path: /insert/opentelemetry/v1/traces
+            timeout: 5s
+  values:
+    global:
+      proxy:
+        resources:
+          requests: { cpu: 20m, memory: 48Mi }
+          limits: { memory: 192Mi }
+    pilot:
+      resources:
+        requests: { cpu: 50m, memory: 192Mi }
+---
+# Включаем трейсинг во всём mesh: 20 % запросов (на стенде; в production меньше)
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata: { name: mesh-default, namespace: istio-system }
+spec:
+  tracing:
+    - providers: [ { name: otel-vtraces } ]
+      randomSamplingPercentage: 20

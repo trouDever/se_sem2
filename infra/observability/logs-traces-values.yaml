@@ -1,0 +1,29 @@
+# VictoriaLogs (логи контейнеров) и VictoriaTraces (трейсы от Envoy/Istio).
+# Используются как values сразу для трёх чартов, у каждого свои ключи.
+
+# --- vm/victoria-logs-single
+logs:
+  fullnameOverride: vlogs
+  server:
+    retentionPeriod: 3d
+    persistentVolume: { enabled: true, size: 3Gi }
+    resources: { requests: { cpu: 20m, memory: 64Mi }, limits: { memory: 384Mi } }
+
+# --- vm/victoria-logs-collector (DaemonSet, читает логи всех контейнеров на ноде)
+collector:
+  fullnameOverride: vlogs-collector
+  remoteWrite:
+    - url: http://vlogs-server.observability.svc:9428
+  resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 128Mi } }
+
+# --- vm/victoria-traces-single (принимает OTLP, отдаёт Jaeger API для Grafana)
+traces:
+  fullnameOverride: vtraces
+  server:
+    retentionPeriod: 3d
+    persistentVolume: { enabled: true, size: 3Gi }
+    resources: { requests: { cpu: 20m, memory: 64Mi }, limits: { memory: 384Mi } }
+
+# Отдельный ClusterIP-сервис для приёма OTLP: чарт создаёт headless-сервис, а Envoy не может
+# отправлять собственные запросы (экспорт спанов) на headless-сервис -> получал 503.
+# Манифест: infra/observability/vtraces-otlp-service.yaml

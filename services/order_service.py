@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 import asyncpg
 import httpx
-from fastapi import Header, HTTPException, Response
+from fastapi import Header, HTTPException, Request, Response
 
 from fm_common import (OUTBOX_DDL, OutboxRelay, Producer, create_app, jlog, make_event, mark_processed,
                        run_consumer, stage)
@@ -87,8 +87,14 @@ async def lifespan(app):
 app = create_app(lifespan)
 
 
+# Заголовки трассировки, которые Envoy ставит на входящий запрос. Их нужно передать дальше,
+# иначе вызов inventory окажется отдельным трейсом, а не продолжением запроса покупателя.
+TRACE_HEADERS = ("x-request-id", "traceparent", "tracestate", "x-b3-traceid", "x-b3-spanid",
+                 "x-b3-parentspanid", "x-b3-sampled", "x-b3-flags")
+
+
 @app.post("/orders", status_code=201)
-async def create_order(body: dict, response: Response, x_user_id: str = Header(...),
+async def create_order(body: dict, request: Request, response: Response, x_user_id: str = Header(...),
                        idempotency_key: str | None = Header(None)):
     items = [{"sku": i["sku"], "qty": int(i.get("qty", 1)), "price_cents": int(i["price_cents"])}
              for i in body["items"]]
@@ -105,7 +111,8 @@ async def create_order(body: dict, response: Response, x_user_id: str = Header(.
     try:
         res = await http.post("/inventory/reservations", json={
             "order_id": order_id, "buyer_id": x_user_id,
-            "items": [{"sku": i["sku"], "qty": i["qty"]} for i in items]})
+            "items": [{"sku": i["sku"], "qty": i["qty"]} for i in items]},
+            headers={h: request.headers[h] for h in TRACE_HEADERS if h in request.headers})
     except httpx.HTTPError as e:
         jlog("inventory unavailable", error=repr(e))
         raise HTTPException(503, "inventory unavailable, try again")

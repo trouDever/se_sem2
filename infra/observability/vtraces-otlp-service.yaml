@@ -1,0 +1,7 @@
+# ClusterIP-сервис приёма трейсов (OTLP/HTTP) для Envoy в Istio
+apiVersion: v1
+kind: Service
+metadata: { name: vtraces-otlp, namespace: observability }
+spec:
+  selector: { app.kubernetes.io/instance: vtraces, app: server }
+  ports: [ { name: http-otlp, port: 10428, targetPort: 10428 } ]

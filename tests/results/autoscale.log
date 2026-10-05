@@ -1,0 +1,13 @@
++1s start: kwok nodes=0
++1s scaled inflate to 10 pods (1 CPU each)
++1s kwok nodes=0 running pods=0
++10s kwok nodes=4 running pods=10
+No resources found in autoscale-demo namespace.
++10s after scale-up: nodes=4 running=10 pending=0
+  kwok-worker-262lw Ready
+  kwok-worker-fdfch Ready
+  kwok-worker-s8xwc Ready
+  kwok-worker-xzfg6 Ready
++11s scaled inflate to 0
++11s kwok nodes=4
++86s kwok nodes=1

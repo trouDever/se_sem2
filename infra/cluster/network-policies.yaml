@@ -15,6 +15,9 @@ spec:
         - matchLabels: { k8s:io.kubernetes.pod.namespace: flashmarket, app: order-service }
       toPorts: [ { ports: [ { port: "8080" } ] } ]
   egress:
+    - toEndpoints:                                         # спаны трейсов из sidecar -> VictoriaTraces
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: observability }
+      toPorts: [ { ports: [ { port: "10428" } ] } ]
     - toEndpoints:
         - matchLabels: { k8s:io.kubernetes.pod.namespace: data }
         - matchLabels: { k8s:io.kubernetes.pod.namespace: kafka }
@@ -75,6 +78,9 @@ spec:
         - matchLabels: { k8s:io.kubernetes.pod.namespace: edge }
         - matchLabels: { k8s:io.kubernetes.pod.namespace: observability }
   egress:
+    - toEndpoints:                                         # спаны трейсов из sidecar -> VictoriaTraces
+        - matchLabels: { k8s:io.kubernetes.pod.namespace: observability }
+      toPorts: [ { ports: [ { port: "10428" } ] } ]
     - toEndpoints:
         - matchLabels: { k8s:io.kubernetes.pod.namespace: flashmarket }
         - matchLabels: { k8s:io.kubernetes.pod.namespace: edge }

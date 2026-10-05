@@ -1,0 +1,22 @@
+# Тестовая нагрузка для автоскейлера: 10 подов по 1 CPU, которым разрешено жить только на kwok-нодах.
+# kwok-нода — 4 CPU (часть занимают DaemonSet'ы Cilium), максимум группы — 5 нод.
+apiVersion: v1
+kind: Namespace
+metadata: { name: autoscale-demo }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: inflate, namespace: autoscale-demo }
+spec:
+  replicas: 0
+  selector: { matchLabels: { app: inflate } }
+  template:
+    metadata: { labels: { app: inflate } }
+    spec:
+      nodeSelector: { kwok-nodegroup: kwok-worker }
+      tolerations:
+        - { key: kwok.x-k8s.io/node, operator: Exists, effect: NoSchedule }
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources: { requests: { cpu: "1", memory: 512Mi } }
