@@ -3,4 +3,4 @@ name: microservice
 description: Общий Helm-чарт для микросервисов TicketFlow (Kafka, Valkey, PostgreSQL/MongoDB/ClickHouse)
 type: application
 version: 0.1.0
-appVersion: "419365c537"
+appVersion: "b04940ff01"

@@ -3,7 +3,7 @@ name: service
 module: catalog                # какой модуль запускать из общего образа (SERVICE)
 image:
   repository: registry.ci:5000/flashmarket/app
-  tag: "419365c537"
+  tag: "b04940ff01"
   pullPolicy: IfNotPresent
 replicas: 1                    # однонодовый стенд; в production 2+ и HPA
 port: 8080
