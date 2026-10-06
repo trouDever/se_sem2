@@ -1,0 +1,10 @@
+# vm/victoria-logs-collector: сбор логов всех контейнеров на ноде
+fullnameOverride: vlogs-collector
+remoteWrite:
+- url: http://vlogs-server.observability.svc:9428
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    memory: 128Mi

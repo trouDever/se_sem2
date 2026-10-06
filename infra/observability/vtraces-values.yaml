@@ -1,0 +1,13 @@
+# vm/victoria-traces-single: хранилище трейсов, приём OTLP и Jaeger API для Grafana
+fullnameOverride: vtraces
+server:
+  retentionPeriod: 3d
+  persistentVolume:
+    enabled: true
+    size: 3Gi
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 384Mi
