@@ -1,30 +1,7 @@
 # FlashMarket
 
-Учебный проект по ПрИнж: маркетплейс, который должен выдержать старт Чёрной пятницы. Шесть микросервисов на FastAPI, сага заказа через Kafka, резерв товара без overselling и инфраструктура вокруг: Kubernetes с Cilium, Terraform, Ansible, ArgoCD, Istio, HAProxy с Keepalived, rate limiting и мониторинг на VictoriaMetrics.
-
-![Контейнеры](report/diagrams/png/02-l2-container.png)
-
-## Что где лежит
-
-| Папка | Что внутри |
-|---|---|
-| `services/` | общий пакет `fm_common` и шесть сервисов, один Dockerfile на всех |
-| `helm/` | общий чарт сервиса и values для каждого |
-| `gitops/` | приложения ArgoCD (App of Apps) |
-| `infra/cluster/` | конфиг kind, values Cilium, сетевые политики |
-| `infra/terraform/` | неймспейсы, сервисные аккаунты, секреты |
-| `infra/ansible/` | роль `strimzi_kafka` и образ для её запуска |
-| `infra/data/` | PostgreSQL, MongoDB, Valkey, MinIO |
-| `infra/gateway/` | Istio Gateway и rate limiter |
-| `infra/haproxy/` | пара HAProxy + Keepalived |
-| `infra/observability/` | values мониторинга, дашборд, алерты |
-| `infra/git/` | Gitea и манифест ArgoCD |
-| `tests/` | smoke-тест, сценарий Locust, отказы по расписанию, результаты |
-| `docs/`, `report/` | ТЗ, требования, диаграммы и графики для отчёта |
-
 ## Как поднять
 
-Нужны Docker, kind, kubectl, helm, istioctl.
 
 ```bash
 kind create cluster --config infra/cluster/kind-config.yaml
@@ -43,13 +20,3 @@ for s in catalog inventory order payment notification analytics; do
 done
 bash infra/haproxy/up.sh
 ```
-
-Проверка:
-
-```bash
-docker run --rm --network fm-edge -v $PWD/tests:/t fm-locust python /t/smoke.py http://172.30.0.100
-```
-
-## Результаты
-
-Нагрузочный тест на 5 минут с отказами по расписанию: дефицитный товар продан ровно по остатку, circuit breaker снизил ошибки оплаты с 55.8 % до 0.8 %, переключение HAProxy заняло 5 секунд. Подробности и графики есть в отчёте.
