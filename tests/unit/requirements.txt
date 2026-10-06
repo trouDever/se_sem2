@@ -1,0 +1,4 @@
+-r ../../services/requirements.txt
+pytest==8.*
+pytest-asyncio==1.*
+fakeredis[lua]==2.*

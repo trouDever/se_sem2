@@ -44,22 +44,35 @@ def make_event(event_type: str, key: str, data: dict) -> dict:
 
 # ---------------------------------------------------------------- Kafka
 class Producer:
+    """Kafka-клиент создаётся в start(), внутри event loop: так модули сервисов
+    можно импортировать без Kafka (например, в модульных тестах)."""
+
     def __init__(self):
-        self._p = AIOKafkaProducer(bootstrap_servers=KAFKA, acks="all", enable_idempotence=True,
-                                   linger_ms=5, value_serializer=lambda v: json.dumps(v, default=str).encode())
+        self._p = None
+
+    @staticmethod
+    def _client():
+        return AIOKafkaProducer(bootstrap_servers=KAFKA, acks="all", enable_idempotence=True,
+                                linger_ms=5, value_serializer=lambda v: json.dumps(v, default=str).encode())
 
     async def start(self):
         for attempt in range(60):
+            self._p = self._client()
             try:
                 await self._p.start()
                 return
             except Exception as e:  # Kafka ещё не готова при старте пода
                 jlog("kafka producer not ready", attempt=attempt, error=str(e))
+                try:
+                    await self._p.stop()
+                except Exception:
+                    pass
                 await asyncio.sleep(2)
         raise RuntimeError("kafka unavailable")
 
     async def stop(self):
-        await self._p.stop()
+        if self._p is not None:
+            await self._p.stop()
 
     async def send(self, topic: str, event: dict):
         t0 = time.perf_counter()
