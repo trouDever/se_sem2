@@ -11,3 +11,13 @@ No resources found in autoscale-demo namespace.
 +11s scaled inflate to 0
 +11s kwok nodes=4
 +86s kwok nodes=1
++379s kwok nodes=0
++380s done: kwok nodes=0
+2026-10-05T23:29:09Z   Scale-up: group kwok-worker size set to 5 instead of 0 (max: 5)
+2026-10-05T23:35:24Z   Scale-up: setting group kwok-worker size to 4 instead of 0 (max: 5)
+2026-10-05T23:35:24Z   Scale-up: group kwok-worker size set to 4 instead of 0 (max: 5)
+2026-10-05T23:34:31Z   marked the node as toBeDeleted/unschedulable
+2026-10-05T23:34:31Z   marked the node as toBeDeleted/unschedulable
+2026-10-05T23:36:35Z   marked the node as toBeDeleted/unschedulable
+
+[exited with code 0]

@@ -93,12 +93,30 @@ grafana:
   service:
     type: NodePort
     nodePort: 30300
-  resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { memory: 512Mi } }
+  resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 1Gi } }
   # первый старт Grafana 12 (миграции SQLite) на нагруженной ноде длится несколько минут
   livenessProbe: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 600, periodSeconds: 20, failureThreshold: 10 }
   grafana.ini:
     auth.anonymous: { enabled: true, org_role: Viewer }
+    users: { viewers_can_edit: true }   # анонимный просмотр Explore (логи, трейсы) на стенде
     dashboards: { default_home_dashboard_path: /tmp/dashboards/flashmarket.json }
   sidecar:
     dashboards: { enabled: true, label: grafana_dashboard, folder: /tmp/dashboards, searchNamespace: observability }
     datasources: { enabled: true }
+  plugins: [victoriametrics-logs-datasource]
+
+# Источники логов и трейсов для Grafana (в этом чарте задаются через defaultDatasources.extra)
+defaultDatasources:
+  extra:
+    - name: VictoriaLogs
+      uid: victorialogs
+      type: victoriametrics-logs-datasource
+      access: proxy
+      url: http://vlogs-server.observability.svc:9428
+    - name: Traces
+      uid: traces
+      type: jaeger
+      access: proxy
+      url: http://vtraces-server.observability.svc:10428/select/jaeger
+      jsonData:
+        tracesToLogsV2: { datasourceUid: victorialogs, filterByTraceID: true }
