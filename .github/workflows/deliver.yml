@@ -1,0 +1,91 @@
+# Задания 5.1 и 5.2: модульные тесты, затем Build (Kaniko) -> Push в локальный registry
+# -> Update Helm chart -> ArgoCD Sync. Доставка идёт на self-hosted раннере на моём компьютере,
+# у которого есть доступ к kind-кластеру.
+name: deliver
+on:
+  push:
+    branches: [main]
+    paths: ["services/**", "tests/unit/**", "infra/ci/kaniko-job.yaml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deliver
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: "**/requirements.txt" }
+      - name: unit tests
+        working-directory: tests/unit
+        run: |
+          pip install -q -r requirements.txt
+          python -m pytest -q
+
+  deliver:
+    needs: test
+    if: github.repository == 'trouDever/se_sem2'
+    runs-on: [self-hosted, windows, flashmarket]
+    defaults:
+      run:
+        shell: C:\Program Files\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}
+    env:
+      REPO: https://github.com/${{ github.repository }}.git
+      IMAGE: registry.ci:5000/flashmarket/app
+      APPS: catalog inventory order payment notification analytics
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: plan
+        run: |
+          TAG="${GITHUB_SHA:0:10}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "commit $GITHUB_SHA -> image tag $TAG"
+          kubectl config use-context kind-flashmarket
+
+      - name: build and push (Kaniko)
+        run: |
+          kubectl -n ci delete job "build-$TAG" --ignore-not-found
+          sed -e "s/__TAG__/$TAG/g" -e "s/__SHA__/$GITHUB_SHA/g" -e "s#__REPO__#$REPO#g" infra/ci/kaniko-job.yaml \
+            | kubectl apply -f -
+          if ! kubectl -n ci wait --for=condition=complete "job/build-$TAG" --timeout=1200s; then
+            kubectl -n ci logs "job/build-$TAG" --all-containers --tail=50
+            exit 1
+          fi
+          kubectl get --raw "/api/v1/namespaces/ci/services/registry:5000/proxy/v2/flashmarket/app/tags/list" \
+            | grep -q "\"$TAG\""
+
+      - name: update chart
+        run: |
+          git fetch -q origin main
+          git checkout -q -B main origin/main
+          sed -i -e "s#^  repository: .*#  repository: $IMAGE#" -e "s#^  tag: .*#  tag: \"$TAG\"#" helm/microservice/values.yaml
+          sed -i -e "s#^appVersion: .*#appVersion: \"$TAG\"#" helm/microservice/Chart.yaml
+          if git diff --quiet; then echo "chart already at $TAG"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qam "обновлён образ сервисов"
+          git push -q origin main
+
+      - name: argocd sync
+        run: |
+          for app in $APPS; do
+            kubectl -n argocd annotate application "$app-service" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
+          done
+          for app in $APPS; do
+            for i in $(seq 1 90); do
+              img=$(kubectl -n flashmarket get deploy "$app-service" -o jsonpath='{.spec.template.spec.containers[0].image}')
+              [ "$img" = "$IMAGE:$TAG" ] && break
+              sleep 5
+            done
+            echo "$app-service -> $img"
+            [ "$img" = "$IMAGE:$TAG" ] || exit 1
+          done
+          for app in $APPS; do
+            kubectl -n flashmarket rollout status "deploy/$app-service" --timeout=600s
+          done

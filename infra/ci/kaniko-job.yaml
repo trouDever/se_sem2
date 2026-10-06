@@ -1,5 +1,5 @@
-# Шаблон сборки образа (задание 5.2). Пайплайн подставляет __TAG__ и __SHA__ и применяет Job.
-# initContainer клонирует нужный коммит из Gitea, Kaniko собирает образ без Docker-демона
+# Шаблон сборки образа (задание 5.2). Пайплайн подставляет __TAG__, __SHA__ и __REPO__ и применяет Job.
+# initContainer клонирует нужный коммит из репозитория на GitHub, Kaniko собирает образ без Docker-демона
 # и пушит его в локальный registry; слои кэшируются в том же registry.
 apiVersion: batch/v1
 kind: Job
@@ -19,7 +19,7 @@ spec:
           image: alpine/git:2.47.2
           command: [sh, -c]
           args:
-            - git clone -q http://gitea-http.git.svc:3000/fm/flashmarket.git /workspace && cd /workspace && git checkout -q __SHA__
+            - git clone -q __REPO__ /workspace && cd /workspace && git checkout -q __SHA__
           volumeMounts: [ { name: workspace, mountPath: /workspace } ]
       containers:
         - name: kaniko

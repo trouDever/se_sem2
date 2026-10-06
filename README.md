@@ -38,21 +38,15 @@ helm upgrade --install vlogs-collector vm/victoria-logs-collector -n observabili
 helm upgrade --install vtraces vm/victoria-traces-single -n observability -f infra/observability/vtraces-values.yaml
 kubectl apply -f infra/observability/vtraces-otlp-service.yaml -f infra/observability/dashboard-configmap.yaml -f infra/observability/alerts.yaml
 
-# Gitea и ArgoCD (App of Apps)
-kubectl apply -f infra/git/gitea.yaml
+# ArgoCD (App of Apps), читает этот репозиторий на GitHub
 kubectl apply -n argocd --server-side -f infra/git/argocd-install.yaml
-# в Gitea нужно создать пользователя fm и запушить туда этот репозиторий, после чего:
 kubectl apply -f gitops/root-app.yaml
 
-# CI: локальный registry и раннер Gitea Actions
+# CI: локальный registry для образов
 kubectl apply -f infra/ci/registry.yaml
 bash infra/ci/node-registry.sh
-docker build -t fm-act-runner:0.1.0 -f infra/ci/Dockerfile.runner infra/ci
-kind load docker-image fm-act-runner:0.1.0 --name flashmarket
-kubectl create secret generic runner-registration -n ci \
-  --from-literal=token=$(kubectl exec -n git gitea-0 -- gitea actions generate-runner-token)
-kubectl apply -f infra/ci/runner.yaml
-# дальше каждый push в services/ собирает образ, обновляет тег в чарте, а ArgoCD выкатывает сервисы
+# раннер GitHub Actions ставится на этот же компьютер (нужны Docker, kubectl и Git Bash), см. ниже;
+# дальше каждый push в services/ прогоняет тесты, собирает образ, обновляет тег в чарте, а ArgoCD выкатывает сервисы
 
 # автомасштабирование нод
 kubectl apply -f infra/autoscaler/kwok.yaml -f infra/autoscaler/stage-fast.yaml
@@ -63,4 +57,24 @@ kubectl apply --server-side --force-conflicts -f infra/autoscaler/kwok-provider.
 # сетевые политики и пара HAProxy с Keepalived
 kubectl apply -f infra/cluster/network-policies.yaml
 bash infra/haproxy/up.sh
+```
+
+## Раннер GitHub Actions
+
+Раннер работает на компьютере, где поднят kind-кластер, с меткой `flashmarket`.
+Токен берётся в настройках репозитория: Settings → Actions → Runners → New self-hosted runner.
+
+```powershell
+mkdir C:\actions-runner; cd C:\actions-runner
+# скачать и распаковать actions-runner-win-x64 по инструкции со страницы New self-hosted runner, затем:
+.\config.cmd --url https://github.com/trouDever/se_sem2 --token <ТОКЕН> --labels flashmarket --unattended
+.\run.cmd
+```
+
+## Модульные тесты
+
+```bash
+cd tests/unit
+pip install -r requirements.txt
+python -m pytest -q
 ```

@@ -7,7 +7,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: http://gitea-http.git.svc:3000/fm/flashmarket.git
+    repoURL: https://github.com/trouDever/se_sem2.git
     targetRevision: main
     path: helm/microservice
     helm:
