@@ -5,7 +5,7 @@ name: deliver
 on:
   push:
     branches: [main]
-    paths: ["services/**", "tests/unit/**", "infra/ci/kaniko-job.yaml"]
+    paths: ["services/**", "tests/unit/**", "infra/ci/kaniko-job.yaml", ".github/workflows/deliver.yml"]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
     runs-on: [self-hosted, windows, flashmarket]
     defaults:
       run:
-        shell: C:\Program Files\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}
+        shell: C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}
     env:
       REPO: https://github.com/${{ github.repository }}.git
       IMAGE: registry.ci:5000/flashmarket/app
