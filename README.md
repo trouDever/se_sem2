@@ -2,7 +2,6 @@
 
 ## Как поднять
 
-Нужны Docker, kind, kubectl, helm и istioctl. Docker лучше дать 12 ГБ памяти: с 8 ГБ стенд работает на пределе.
 
 ```bash
 # репозитории Helm-чартов
@@ -61,8 +60,6 @@ bash infra/haproxy/up.sh
 
 ## Раннер GitHub Actions
 
-Раннер работает на компьютере, где поднят kind-кластер, с меткой `flashmarket`.
-Токен берётся в настройках репозитория: Settings → Actions → Runners → New self-hosted runner.
 
 ```powershell
 mkdir C:\actions-runner; cd C:\actions-runner
